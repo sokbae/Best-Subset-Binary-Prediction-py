@@ -24,9 +24,9 @@ def transportationcv(warm_start = 1,tau=1.5,mio=1,q=1,series_exp=1,b=10,time_lim
     """
 
     data = np.genfromtxt(pkg_resources.resource_filename(__name__, 'data_horowitz.csv'), delimiter=',')
-    tr_ind = np.genfromtxt(pkg_resources.resource_filename(__name__, 'tr_ind.csv'), delimiter=',')
-    test_ind = np.genfromtxt(pkg_resources.resource_filename(__name__, 'test_ind.csv'), delimiter=',')
-
+    tr_ind = np.genfromtxt(pkg_resources.resource_filename(__name__, 'tr_ind.csv'), dtype='bool',delimiter=',')
+    test_ind = np.genfromtxt(pkg_resources.resource_filename(__name__, 'test_ind.csv'),dtype='bool', delimiter=',')
+    print(tr_ind)
     beta0 = 1
     fold=tr_ind.shape[1]
     bhat=np.zeros((10,fold))

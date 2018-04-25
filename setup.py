@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(name='bsbp',
       packages=['bsbp'],
-      version='0.1.2',
+      version='0.1.3',
       description='Implementation of the best subset maximum score binary prediction method proposed by Chen and Lee (2017).',
       url='https://github.com/thupham17/Best-Subset-Binary-Prediction',
       download_url='https://github.com/thupham17/Best-Subset-Binary-Prediction/archive/master.tar.gz',
