@@ -26,6 +26,14 @@ pip install -e .
   Implements warm-start strategy by refining the input parameter space to improve the MIO computational performance.
 - cv_best_subset_maximum_score:
   Implements cross validation best subset binary prediction and computes the optimal q value.
+
+### Support functions
+- miobnd_fn: Solves the maximization problem max |beta0*x(i,1)+x(i,:)\*t| over t subject to given bounds.
+- logit: logit regression.
+- get_bnd: gets bound for warm start approach.
+
+Use help() to see parameters and outputs.
+
 ## Examples
 Included in the package are 2 examples from the original paper.
 
