@@ -3,11 +3,22 @@ from math import floor, log, sqrt
 import numpy as np
 import numpy.matlib as npm
 from scipy.linalg import toeplitz
-from scipy.stats import multivariate_normal
-from scipy.stats import norm
+from scipy.stats import multivariate_normal, norm
 import copy
+from . import simulation
+from . import transportation
+from . import transportationcv
 
 def miobnd_fn(x,beta0,bnd):
+    """
+    Solves the maximization problem max |beta0*x(i,1)+x(i,:)*t| over t subject to bnd.
+
+    Args:
+        x (array): (n by k) matrix of covariate data.
+        beta0 (int): coefficient for the first covariate in x.
+        bnd (array): ((k-1) by 2) matrix where the 1st and 2nd columns store the lower and
+                    upper bounds of the unknown coefficients.
+    """
     n=np.shape(x)[0]
     k=np.shape(x)[1]
 
@@ -25,7 +36,7 @@ def miobnd_fn(x,beta0,bnd):
     v = [0]*2
     t = [0]*(k+1)
 
-    value=np.zeros(n);
+    value=np.zeros(n)
 
     # Create variables
     for i in range(0,k-1):
@@ -48,8 +59,6 @@ def miobnd_fn(x,beta0,bnd):
             m.addConstr(expr, GRB.GREATER_EQUAL, -alpha)
             m.update()
             m.optimize()
-            if i == 0:
-                m.write('miobnd.lp')
             v[0] = m.objVal
             m.remove(m.getConstrs()[0])
             m.update()
@@ -81,6 +90,35 @@ def miobnd_fn(x,beta0,bnd):
     return value
 
 def max_score_constr_fn(y,x_foc,x_aux,beta0,q,T,abgap,bnd,mio):
+    """
+    Calculates the maximum score of the objective function.
+
+    Args:
+        y (array): vector of binary outcomes.
+        x_foc (array):  (n by k) matrix of focus covariates where the first column should
+                        contain data of the continous regressor with respect to the scale normalization.
+        x_aux (array):  (n by d) matrix of auxiliary covariates which will be selected based on best
+                        subset covariate selection procedure.
+        beta0 (int): Coefficient taking value either 1 or -1 to normalize the scale for the first
+                    first covariate in x_foc.
+        q (int): Cardinality constraint for the covariate selection.
+        abgap (int): Absolute gap specified for early termination of the MIO solver.
+        bnd (array): (((k-1)+d) by 2) matrix where the first and second columns respectively
+                 store the lower and upper bounds of the unknown coefficients. First (k-1)
+                 rows correspond to the bounds of the focused covariates excluding the first one.
+                 Remaining d rows correspond to the bounds of the auxiliary covariates.
+        mio (int) : MIO formulation of the best subset maximum score problem
+                  set mio = 1 for Method 1 of the paper
+                  set mio = 2 for Method 2 of the paper
+
+    Yields:
+        bhat (array): Maximum score estimates for the unknown coefficients.
+        score (array): Value of maximum score objective function.
+        gap   (array): MIO optimization gap value in case of early termination
+                       gap = 0 ==> optimal solution is found within the time limit.
+        rtime (array): Time used by the MIO solver in the estimation procedure.
+    """
+
     N=len(y)
     k=np.shape(x_foc)[1]-1
     d=np.shape(x_aux)[1]
@@ -121,7 +159,7 @@ def max_score_constr_fn(y,x_foc,x_aux,beta0,q,T,abgap,bnd,mio):
     htemp=np.concatenate((np.identity(d),-np.identity(d),np.array([np.zeros(d)])),axis=0)
     etemp=np.concatenate((-np.diag(bnd[k:k+d,1]),np.diag(bnd[k:k+d,0]),np.array([np.ones(d)])),axis=0) # check indices
     mtemp1=np.concatenate((ztemp2, np.zeros((2*d+1,k)),htemp, etemp),axis=1)
-    mtemp2=(np.append(np.zeros(2*d),q)).reshape(-1,1)
+    mtemp2=np.append(np.zeros((2*d,1)),[[q]],axis=0)
 
     if mio == 1: #method 1 formulation
         #set objective
@@ -190,7 +228,6 @@ def max_score_constr_fn(y,x_foc,x_aux,beta0,q,T,abgap,bnd,mio):
         m.update()
 
     try:
-        m.write('maxscore1.lp')
         m.optimize()
         bhat = []
         for j in range(N,N+k+d):
@@ -207,6 +244,13 @@ def max_score_constr_fn(y,x_foc,x_aux,beta0,q,T,abgap,bnd,mio):
     return bhat,score,gap,rtime,ncount
 
 def logit(y,x):
+    """
+    Computes the estimates of the logit regression of y on x.
+
+    Args:
+        y (array): (n by 1) array.
+        x (array): (n by k) array.
+    """
     cnv = 0
     b0 = np.zeros(x.shape[1])
 
@@ -227,6 +271,20 @@ def logit(y,x):
     return b
 
 def get_bnd(y,x,beta0,bnd):
+    """
+    Refines the bounds of the unknown coefficients for the parameter space in warm start approach.
+
+    Args:
+        x (array): (n by k) matrix of covariate data.
+        beta0 (int): Coefficient for the first covariate in x.
+        bnd (array): ((k-1) by 2) matrix where the first and second columns respectively
+                     store the lower and upper bounds of the unknown coefficients
+
+    Yields:
+        bound (array): ((k-1) by 2) matrix for the refined lower and upper bounds
+                    of the unknown coefficients for the parameter space used
+                    in the warm-start approach.
+    """
     k=x.shape[1]-1
 
     p_hat = 1/(1+np.exp(-x@logit(y,x)))
@@ -263,7 +321,6 @@ def get_bnd(y,x,beta0,bnd):
         objExpr.add(t[i],1)
         m.setObjective(objExpr, GRB.MINIMIZE)
         m.update()
-        m.write('miobnd_{0}_min.lp'.format(i))
         try:
             m.optimize()
             bound[i,0]=m.objVal
@@ -276,7 +333,6 @@ def get_bnd(y,x,beta0,bnd):
         for j in range(k):
             m.getVars()[j].lb = bound[j,0]
         m.update()
-        m.write('miobnd_{0}_max.lp'.format(i))
 
         try:
             m.optimize()
@@ -290,16 +346,73 @@ def get_bnd(y,x,beta0,bnd):
     return bound
 
 def warm_start_max_score(y,x_foc,x_aux,beta0,q,T,tol,bnd,mio,tau):
+    """
+    Implements the warm start approach.
+
+    Args:
+        y (array): vector of binary outcomes.
+        x_foc (array):  (n by k) matrix of focus covariates where the first column should
+                        contain data of the continous regressor with respect to the scale normalization.
+        x_aux (array):  (n by d) matrix of auxiliary covariates which will be selected based on best
+                        subset covariate selection procedure.
+        beta0 (int): Coefficient taking value either 1 or -1 to normalize the scale for the first
+                    first covariate in x_foc.
+        q (int): Cardinality constraint for the covariate selection.
+        T (int): Time limit specified for the MIO solver.
+        bnd (array): (((k-1)+d) by 2) matrix where the first and second columns respectively
+                 store the lower and upper bounds of the unknown coefficients. First (k-1)
+                 rows correspond to the bounds of the focused covariates excluding the first one.
+                 Remaining d rows correspond to the bounds of the auxiliary covariates.
+        mio (int) : MIO formulation of the best subset maximum score problem
+                  set mio = 1 for Method 1 of the paper
+                  set mio = 2 for Method 2 of the paper
+        tau (int): Tuning parameter for enlarging the estimated bounds.
+
+    Yields:
+        bhat (array): Maximum score estimates for the unknown coefficients.
+        score (array): Value of maximum score objective function.
+        gap   (array): MIO optimization gap value in case of early termination
+                       gap = 0 ==> optimal solution is found within the time limit.
+        rtime (array): Time used by the MIO solver in the estimation procedure.
+    """
     bnd_h = get_bnd(y,np.concatenate((x_foc,x_aux),axis=1),beta0,bnd)
-    print(bnd_h)
     bnd_abs = np.array([tau*np.amax(np.absolute(bnd_h),1)])
-    print(bnd_abs)
     bnd0 = np.concatenate(((np.maximum(-bnd_abs,bnd[:,0])).T,(np.minimum(bnd_abs,bnd[:,1])).T),axis =1)
-    print(bnd0)
     bhat, score, gap, rtime, ncount  = max_score_constr_fn(y,x_foc,x_aux,beta0,q,T,tol,bnd0,mio)
     return bhat,score,gap,rtime,ncount
 
 def cv_best_subset_maximum_score(tr_ind,test_ind,data,focus_ind,aux_ind,beta0,q_range,T,tol,bnd,mio):
+    """
+    Computes the optimal q value via the cross validation procedure.
+
+    Args:
+        data (array): vector of binary outcomes.
+        tr_ind (array): Indices for training sample.
+        test_ind (array): Indices for validation sample.
+        focus_ind (array):  Indices for focus covariates.
+        aux_ind (array):  Indices for auxiliary covariates.
+        beta0 (int): Coefficient taking value either 1 or -1 to normalize the scale for the first
+                    first covariate in x_foc.
+        q (int): Cardinality constraint for the covariate selection.
+        T (int): Time limit specified for the MIO solver.
+        bnd (array): (((k-1)+d) by 2) matrix where the first and second columns respectively
+                 store the lower and upper bounds of the unknown coefficients. First (k-1)
+                 rows correspond to the bounds of the focused covariates excluding the first one.
+                 Remaining d rows correspond to the bounds of the auxiliary covariates.
+        mio (int) : MIO formulation of the best subset maximum score problem
+                  set mio = 1 for Method 1 of the paper
+                  set mio = 2 for Method 2 of the paper
+        tau (int): Tuning parameter for enlarging the estimated bounds.
+
+    Yields:
+        best_q: Best q value.
+        bhat (array): Maximum score estimates for the unknown coefficients.
+        score (array): Value of maximum score objective function.
+        gap   (array): MIO optimization gap value in case of early termination
+                       gap = 0 ==> optimal solution is found within the time limit.
+        rtime (array): Time used by the MIO solver in the estimation procedure.
+        ncount (array): Node count.
+    """
     q_num = len(q_range)
     fold=tr_ind.shape[1]
     score=np.zeros((fold,q_num))

@@ -1,33 +1,33 @@
-if __name == '__main__':
-    data = np.genfromtxt('data_horowitz.csv', delimiter=',')
-    tr_ind = np.genfromtxt('tr_ind.csv',dtype='bool', delimiter=',')
-    test_ind = np.genfromtxt('test_ind.csv',dtype='bool', delimiter=',')
+#!/usr/bin/env python
+"""
+Reproduction of the empirical results concerning an empirical application
+in the prediction of transportation mode choice using the best subset
+maximum score cross validation approach of Chen and Lee (2017).
+The work-trip mode choice dataset of Horowitz (1993) is included in the package.
+"""
 
-    # create variables from training and validation samples
-    # data columns : [Y DCOST CARS DOVTT DIVTT]
+import argparse
+from . import *
 
-    parser = argparse.ArgumentParser(description='Input parameters. If no inputs, default parameters are used.')
-    parser.add_argument('warmstart', type=int, nargs='?', default =0,help='set this variable to 1 for using the warm start strategy')
-    parser.add_argument('tau', type=float, nargs='?', default =1.5,help='the tuning parameter to construct the refined bound used in the warm start approach')
-    parser.add_argument('mio', type=int, nargs='?', default =1,help='set to 1 for using Method 1 for the MIO formulation, to 2 for using Method 2')
-    parser.add_argument('q', type=int, nargs='?', default =1, help ='value of variable selection bound')
-    parser.add_argument('seriesexp', type=int, nargs='?', default =1, help ='set to 1 for using quadratic expansion terms as covariates')
-    parser.add_argument('b', type=int, nargs='?', default =10, help ='bound value')
-    parser.add_argument('timelimit', type=int, nargs='?', default =8640000, help ='set the MIO solver time limit')
+def transportationcv(warm_start = 1,tau=1.5,mio=1,q=1,series_exp=1,b=10,time_limit=8640000):
+    """ Best subset maximum score approach with cross validation on the work-trip mode choice dataset of Horowitz.
 
-    args = parser.parse_args()
+    Args:
+        warm_start (int,optional): Set to 1 for warm start strategy. Default = 1.
+        tau (float,optional): Tuning paramater to construct the refined bound used in the warm start approach. Default = 1.5.
+        mio (int,optional): Set to 1 for using Method 1 for the MIO formulation. Set to 2 for Method 2. Default to 1.
+        q (int, optional):  Value of the variable selection bound. Default = 1.
+        series_exp (int, optional): Set to 1 to use quadratic expansion terms as covariates. Default = 0.
+        b (int, optional): Bound value. Default = 1.
+        time_limit (int, optional): MIO solver time limit. Default = 8640000.
+    """
 
-    warm_start = args.warmstart
-    tau = args.tau
-    mio = args.mio
-    q = args.q
+    data = np.genfromtxt(pkg_resources.resource_filename(__name__, 'data_horowitz.csv'), delimiter=',')
+    tr_ind = np.genfromtxt(pkg_resources.resource_filename(__name__, 'tr_ind.csv'), delimiter=',')
+    test_ind = np.genfromtxt(pkg_resources.resource_filename(__name__, 'test_ind.csv'), delimiter=',')
 
-    series_exp = args.seriesexp
-    b=args.b
-    beta0=1
-
-    time_limit = args.timelimit
-
+    beta0 = 1
+    fold=tr_ind.shape[1]
     bhat=np.zeros((10,fold))
 
     score=np.zeros((fold,1))
@@ -37,7 +37,7 @@ if __name == '__main__':
     ncount=np.zeros((fold,1))
     p_ratio=np.zeros((fold,1))
 
-    for i in range (1):
+    for i in range (fold):
 
         data_tr=data[tr_ind[:,i],:]
         data_v=data[test_ind[:,i],:]
@@ -115,3 +115,17 @@ if __name == '__main__':
     print('Average node count: ',np.mean(ncount))
     print('Average in-sample score: ',np.mean(in_score))
     print('average out-of-sample performance: ',np.mean(p_ratio))
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Input parameters. If no inputs, default parameters are used.')
+    parser.add_argument('warmstart', type=int, nargs='?', default =1,help='set this variable to 1 for using the warm start strategy')
+    parser.add_argument('tau', type=float, nargs='?', default =1.5,help='the tuning parameter to construct the refined bound used in the warm start approach')
+    parser.add_argument('mio', type=int, nargs='?', default =1,help='set to 1 for using Method 1 for the MIO formulation, to 2 for using Method 2')
+    parser.add_argument('q', type=int, nargs='?', default =1, help ='value of variable selection bound')
+    parser.add_argument('seriesexp', type=int, nargs='?', default =1, help ='set to 1 for using quadratic expansion terms as covariates')
+    parser.add_argument('b', type=int, nargs='?', default =10, help ='bound value')
+    parser.add_argument('timelimit', type=int, nargs='?', default =8640000, help ='set the MIO solver time limit')
+
+    args = parser.parse_args()
+
+    transportationcv(warm_start=args.warmstart,tau = args.tau,mio = args.mio,q = args.q,series_exp = args.seriesexp,b=args.b, time_limit = args.timelimit)
