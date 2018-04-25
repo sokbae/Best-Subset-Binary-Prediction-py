@@ -14,10 +14,6 @@ pip install bsbp
 ```
 python setup.py
 ```
-or
-```
-pip install -e .
-```
 
 ## Main functions
 - max_score_constr_fn:
