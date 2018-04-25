@@ -28,6 +28,11 @@ python setup.py
 - logit: logit regression.
 - get_bnd: gets bound for warm start approach.
 
+Using main or support functions:
+```
+from bsbp import max_score_constr_fn
+max_score_constr_fn()
+```
 Use help() to see parameters and outputs.
 
 ## Examples
