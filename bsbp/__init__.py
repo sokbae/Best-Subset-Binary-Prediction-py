@@ -5,9 +5,6 @@ import numpy.matlib as npm
 from scipy.linalg import toeplitz
 from scipy.stats import multivariate_normal, norm
 import copy
-from . import simulation
-from . import transportation
-from . import transportationcv
 
 def miobnd_fn(x,beta0,bnd):
     """

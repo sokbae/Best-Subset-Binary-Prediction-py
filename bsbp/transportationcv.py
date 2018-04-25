@@ -7,6 +7,7 @@ The work-trip mode choice dataset of Horowitz (1993) is included in the package.
 """
 
 import argparse
+import pkg_resources
 from . import *
 
 def transportationcv(warm_start = 1,tau=1.5,mio=1,q=1,series_exp=1,b=10,time_limit=8640000):
